@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="ja" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="MIDI キーボードを接続して演奏できるモノクロームデザインの Web 楽器 — 実録音サンプル 73 音色（和楽器・ワールド含む）/ 検索・お気に入り / 6 ビジュアライザ">
+<title>MONO KEYS — MIDI Keyboard Studio</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#f6f6f4;
+  --panel:#fdfdfc;
+  --ink:#141414;
+  --ink-soft:#4a4a48;
+  --ink-faint:#93938e;
+  --line:#e5e5e1;
+  --line-strong:#c9c9c4;
+  --key-white:#fdfdfc;
+  --key-white-down:#141414;
+  --key-black:#1c1c1c;
+  --key-black-down:#77776f;
+  --meter-track:#e5e5e1;
+  --shadow:0 1px 2px rgba(0,0,0,.04),0 10px 28px rgba(0,0,0,.06);
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Courier New",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0d0d0c;
+    --panel:#151514;
+    --ink:#efefec;
+    --ink-soft:#b5b5b0;
+    --ink-faint:#77776f;
+    --line:#262624;
+    --line-strong:#3b3b38;
+    --key-white:#e8e8e4;
+    --key-white-down:#454542;
+    --key-black:#1a1a19;
+    --key-black-down:#8d8d86;
+    --meter-track:#2a2a28;
+    --shadow:0 1px 2px rgba(0,0,0,.5),0 12px 32px rgba(0,0,0,.5);
+  }
+}
+
+html{block-size:100%}
+body{
+  min-block-size:100%;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:"Avenir Next","Helvetica Neue",Helvetica,"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic UI",Meiryo,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  display:flex;flex-direction:column;
+}
+
+/* ---------- header ---------- */
+header{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+  padding:20px 30px;border-block-end:1px solid var(--line);
+}
+.brand h1{font-size:17px;font-weight:600;letter-spacing:.44em}
+.brand p{font-size:9.5px;letter-spacing:.32em;color:var(--ink-faint);margin-block-start:5px}
+.status{display:flex;gap:22px;flex-wrap:wrap}
+.chip-status{display:flex;align-items:center;gap:9px;font-size:11px;letter-spacing:.1em;color:var(--ink-soft)}
+.dot{inline-size:8px;block-size:8px;border-radius:50%;background:var(--line-strong);transition:background .25s}
+.dot.on{background:var(--ink);animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+
+/* ---------- layout ---------- */
+main{
+  flex:1;inline-size:min(1180px,100%);margin-inline:auto;
+  padding:22px 24px 8px;display:flex;flex-direction:column;gap:16px;
+}
+.label{font-size:9.5px;letter-spacing:.3em;color:var(--ink-faint)}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:none}
+
+/* ---------- visualizer ---------- */
+.viz-wrap{
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  box-shadow:var(--shadow);padding:14px 18px 12px;
+  display:flex;flex-direction:column;gap:10px;
+}
+.viz-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+#viz{inline-size:100%;block-size:176px;display:block}
+
+/* ---------- segmented control ---------- */
+.seg{display:flex;border:1px solid var(--line-strong);border-radius:6px;overflow:hidden}
+.seg button{
+  font-size:10.5px;letter-spacing:.16em;padding:8px 14px;color:var(--ink-soft);
+  border-inline-start:1px solid var(--line);transition:background .15s,color .15s;
+}
+.seg button:first-child{border-inline-start:none}
+.seg button:hover{color:var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.seg.mini button{font-size:9.5px;padding:6px 11px;letter-spacing:.14em}
+
+/* ---------- display panel ---------- */
+.display{
+  display:grid;grid-template-columns:.9fr 1fr 1.4fr 1.4fr .6fr;
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  box-shadow:var(--shadow);overflow:hidden;
+}
+.cell{
+  padding:16px 20px 14px;display:flex;flex-direction:column;gap:10px;min-inline-size:0;
+  border-inline-start:1px solid var(--line);
+}
+.cell:first-child{border-inline-start:none}
+.value{font-family:var(--mono);font-size:28px;font-weight:500;line-height:1;font-variant-numeric:tabular-nums}
+.value.small{font-size:13px;line-height:1.4;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-block-start:auto}
+.meter{block-size:3px;background:var(--meter-track);border-radius:2px;overflow:hidden;margin-block-start:13px}
+.meter-fill{block-size:100%;inline-size:0%;background:var(--ink);transition:inline-size .07s linear}
+.vel-num{font-family:var(--mono);font-size:13px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+
+/* ---------- sound library ---------- */
+.tone{
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  box-shadow:var(--shadow);padding:15px 20px 17px;
+  display:flex;flex-direction:column;gap:13px;
+}
+.tone-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.tone-segs{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.load-note{font-size:10.5px;letter-spacing:.08em;color:var(--ink-faint);flex:1;text-align:end;min-inline-size:0}
+.load-note.busy{animation:pulse 1.4s ease-in-out infinite}
+#toneSearch{
+  font:inherit;font-size:12px;color:var(--ink);background:transparent;
+  border:1px solid var(--line-strong);border-radius:6px;padding:7px 12px;
+  inline-size:200px;outline:none;transition:border-color .15s;
+}
+#toneSearch:focus{border-color:var(--ink)}
+#toneSearch::placeholder{color:var(--ink-faint)}
+.cat-row{display:flex;flex-wrap:wrap;gap:8px}
+.tab{
+  font-size:11px;letter-spacing:.1em;padding:7px 15px;border:1px solid var(--line-strong);
+  border-radius:6px;color:var(--ink-soft);transition:color .15s,border-color .15s,background .15s;
+}
+.tab:hover{color:var(--ink);border-color:var(--ink)}
+.tab[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.preset-grid{display:flex;flex-wrap:wrap;gap:8px}
+.grid-empty{font-size:11px;color:var(--ink-faint);letter-spacing:.06em;padding:6px 2px}
+.chip{
+  display:flex;align-items:center;gap:10px;
+  padding:7px 12px;border:1px solid var(--line-strong);
+  border-radius:999px;color:var(--ink-soft);
+  transition:color .15s,border-color .15s,background .15s;
+}
+.chip:hover{color:var(--ink);border-color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.c-state{inline-size:6px;block-size:6px;border-radius:50%;border:1px solid var(--line-strong);flex:none;transition:background .2s}
+.chip.cached .c-state{background:var(--ink-soft);border-color:var(--ink-soft)}
+.chip.loading .c-state{background:var(--ink-faint);border-color:var(--ink-faint);animation:pulse .9s ease-in-out infinite}
+.chip[aria-pressed="true"] .c-state{background:var(--bg);border-color:var(--bg)}
+.c-names{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:start}
+.c-jp{font-size:11.5px;letter-spacing:.05em;line-height:1}
+.c-en{font-size:8.5px;letter-spacing:.1em;color:var(--ink-faint);text-transform:uppercase;line-height:1}
+.chip[aria-pressed="true"] .c-en{color:var(--bg);opacity:.65}
+.c-fav{font-size:12px;color:var(--line-strong);padding-inline-start:2px;transition:color .15s}
+.c-fav:hover{color:var(--ink)}
+.c-fav.on{color:var(--ink)}
+.chip[aria-pressed="true"] .c-fav{color:var(--bg);opacity:.55}
+.chip[aria-pressed="true"] .c-fav.on{opacity:1}
+
+/* ---------- controls ---------- */
+.controls{
+  display:flex;flex-wrap:wrap;gap:14px 30px;align-items:flex-end;
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:14px 22px 16px;box-shadow:var(--shadow);
+}
+.group{display:flex;flex-direction:column;gap:10px}
+.stepper{display:flex;align-items:center;border:1px solid var(--line-strong);border-radius:6px;overflow:hidden}
+.stepper button{inline-size:32px;padding-block:7px;font-size:13px;color:var(--ink-soft)}
+.stepper button:hover{color:var(--ink)}
+.stepper .oct{
+  font-family:var(--mono);font-size:12px;min-inline-size:40px;text-align:center;
+  border-inline:1px solid var(--line);padding-block:7px;font-variant-numeric:tabular-nums;
+}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;inline-size:150px;block-size:20px;background:transparent;cursor:pointer;
+}
+input[type=range]::-webkit-slider-runnable-track{block-size:2px;background:var(--line-strong);border-radius:1px}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;inline-size:13px;block-size:13px;border-radius:50%;
+  background:var(--ink);margin-block-start:-5.5px;border:none;
+}
+input[type=range]::-moz-range-track{block-size:2px;background:var(--line-strong);border-radius:1px}
+input[type=range]::-moz-range-thumb{inline-size:13px;block-size:13px;border-radius:50%;background:var(--ink);border:none}
+.led-row{display:flex;align-items:center;gap:10px;padding-block:8px}
+.led{inline-size:10px;block-size:10px;border-radius:50%;border:1px solid var(--line-strong);transition:background .1s}
+.led.on{background:var(--ink);border-color:var(--ink)}
+.led-cap{font-size:10.5px;letter-spacing:.14em;color:var(--ink-soft)}
+.ghost{
+  border:1px solid var(--line-strong);border-radius:6px;color:var(--ink-soft);
+  font-size:10.5px;letter-spacing:.16em;padding:8px 16px;transition:border-color .15s,color .15s;
+}
+.ghost:hover{border-color:var(--ink);color:var(--ink)}
+.spacer{flex:1}
+
+/* ---------- piano ---------- */
+.piano-wrap{
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:14px;box-shadow:var(--shadow);
+}
+#piano{
+  position:relative;block-size:225px;touch-action:none;
+  user-select:none;-webkit-user-select:none;
+}
+.key{position:absolute;inset-block-start:0;cursor:pointer}
+.key.white{
+  block-size:100%;background:var(--key-white);border:1px solid var(--line-strong);
+  border-end-start-radius:4px;border-end-end-radius:4px;
+  box-shadow:inset 0 -7px 0 rgba(0,0,0,.035);
+  transition:background .05s;
+}
+.key.white.down{background:var(--key-white-down);border-color:var(--key-white-down);box-shadow:none}
+.key.black{
+  block-size:61%;background:var(--key-black);z-index:2;
+  border-end-start-radius:3px;border-end-end-radius:3px;
+  box-shadow:0 2px 5px rgba(0,0,0,.35);
+  transition:background .05s;
+}
+.key.black.down{background:var(--key-black-down)}
+.klabel{
+  position:absolute;inset-block-end:9px;inset-inline-start:50%;transform:translateX(-50%);
+  font-family:var(--mono);font-size:9px;letter-spacing:.08em;color:var(--ink-faint);
+  pointer-events:none;transition:color .05s;
+}
+.key.white.down .klabel{color:var(--bg)}
+
+/* ---------- hint / footer ---------- */
+.hint{font-size:11.5px;line-height:2;letter-spacing:.05em;color:var(--ink-faint);text-align:center}
+kbd{
+  font-family:var(--mono);font-size:10px;border:1px solid var(--line-strong);
+  border-radius:4px;padding:1px 6px;color:var(--ink-soft);
+}
+footer{
+  text-align:center;padding:16px;margin-block-start:12px;
+  font-size:9.5px;letter-spacing:.28em;color:var(--ink-faint);
+  border-block-start:1px solid var(--line);
+}
+
+@media (max-width:820px){
+  .display{grid-template-columns:1fr 1fr}
+  .cell{border-block-start:1px solid var(--line)}
+  .cell:nth-child(-n+2){border-block-start:none}
+  .cell:nth-child(odd){border-inline-start:none}
+  #piano{block-size:175px}
+  #viz{block-size:130px}
+  #toneSearch{inline-size:100%}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>MONO&thinsp;KEYS</h1>
+    <p>MIDI KEYBOARD STUDIO</p>
+  </div>
+  <div class="status">
+    <div class="chip-status"><span class="dot" id="audioDot"></span><span id="audioLabel">クリックでオーディオ有効化</span></div>
+    <div class="chip-status"><span class="dot" id="midiDot"></span><span id="midiLabel">MIDI 初期化中…</span></div>
+  </div>
+</header>
+
+<main>
+  <section class="viz-wrap" aria-label="ビジュアライザ">
+    <div class="viz-head">
+      <span class="label">VISUALIZER</span>
+      <div class="seg mini" id="vizSeg" role="group" aria-label="ビジュアライザの種類">
+        <button type="button" data-viz="wave" aria-pressed="true">WAVE</button>
+        <button type="button" data-viz="bars" aria-pressed="false">BARS</button>
+        <button type="button" data-viz="radial" aria-pressed="false">RADIAL</button>
+        <button type="button" data-viz="spectro" aria-pressed="false">SPECTRO</button>
+        <button type="button" data-viz="particles" aria-pressed="false">DOTS</button>
+        <button type="button" data-viz="rings" aria-pressed="false">RINGS</button>
+      </div>
+    </div>
+    <canvas id="viz"></canvas>
+  </section>
+
+  <section class="display" aria-label="演奏情報">
+    <div class="cell">
+      <span class="label">NOTE</span>
+      <span class="value" id="noteValue">—</span>
+    </div>
+    <div class="cell">
+      <span class="label">VELOCITY</span>
+      <div class="meter"><div class="meter-fill" id="velFill"></div></div>
+      <span class="vel-num" id="velValue">0</span>
+    </div>
+    <div class="cell">
+      <span class="label">TONE</span>
+      <span class="value small" id="toneValue">—</span>
+    </div>
+    <div class="cell">
+      <span class="label">DEVICE</span>
+      <span class="value small" id="deviceValue">—</span>
+    </div>
+    <div class="cell">
+      <span class="label">VOICES</span>
+      <span class="value" id="voiceValue">0</span>
+    </div>
+  </section>
+
+  <section class="tone" aria-label="音源ライブラリ">
+    <div class="tone-head">
+      <span class="label">SOUND LIBRARY — 73 SAMPLED TONES</span>
+      <span class="load-note" id="loadNote"></span>
+      <div class="tone-segs">
+        <input type="search" id="toneSearch" placeholder="音色を検索（例: ピアノ / koto / sax）" aria-label="音色を検索">
+        <div class="stepper" aria-label="音色を順に切り替え">
+          <button type="button" id="prevTone" aria-label="前の音色" title="前の音色">‹</button>
+          <button type="button" id="nextTone" aria-label="次の音色" title="次の音色">›</button>
+        </div>
+        <div class="seg mini" id="qSeg" role="group" aria-label="音質">
+          <button type="button" data-q="HQ" aria-pressed="true" title="高音質サンプル（MusyngKite）">HQ</button>
+          <button type="button" data-q="LITE" aria-pressed="false" title="軽量サンプル（FluidR3）">LITE</button>
+        </div>
+      </div>
+    </div>
+    <div class="cat-row" id="catSeg" role="group" aria-label="音源カテゴリ">
+      <button type="button" class="tab" data-cat="PIANO" aria-pressed="true">ピアノ</button>
+      <button type="button" class="tab" data-cat="WINDS" aria-pressed="false">管楽器</button>
+      <button type="button" class="tab" data-cat="JAZZ" aria-pressed="false">ジャズ</button>
+      <button type="button" class="tab" data-cat="ELECTRO" aria-pressed="false">エレクトロ</button>
+      <button type="button" class="tab" data-cat="JAPAN" aria-pressed="false">和楽器</button>
+      <button type="button" class="tab" data-cat="WORLD" aria-pressed="false">ワールド</button>
+      <button type="button" class="tab" data-cat="FAV" aria-pressed="false">★ お気に入り</button>
+    </div>
+    <div class="preset-grid" id="presetGrid"></div>
+  </section>
+
+  <section class="controls" aria-label="演奏設定">
+    <div class="group">
+      <span class="label">OCTAVE — PC KEYS</span>
+      <div class="stepper">
+        <button type="button" id="octDown" aria-label="オクターブを下げる">−</button>
+        <span class="oct" id="octValue">0</span>
+        <button type="button" id="octUp" aria-label="オクターブを上げる">＋</button>
+      </div>
+    </div>
+    <div class="group">
+      <span class="label">VOLUME</span>
+      <input type="range" id="vol" min="0" max="100" value="75" aria-label="音量">
+    </div>
+    <div class="group">
+      <span class="label">SUSTAIN</span>
+      <div class="led-row"><span class="led" id="susLed"></span><span class="led-cap">PEDAL / SPACE</span></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="group">
+      <span class="label">&nbsp;</span>
+      <button type="button" class="ghost" id="panic">ALL&thinsp;OFF</button>
+    </div>
+  </section>
+
+  <section class="piano-wrap">
+    <div id="piano" role="application" aria-label="ピアノ鍵盤 C3 から C6"></div>
+  </section>
+
+  <p class="hint">
+    実録音の GM サウンドフォント音源（CDN 配信）— 音色を選ぶと初回のみダウンロードされ、短い試聴が自動再生されます（● = 取得済み / ☆ でお気に入り登録・要インターネット接続）<br>
+    MIDI キーボードは USB 接続で自動認識（Chrome / Edge・ベロシティ / サステインペダル / ピッチベンド対応）。
+    PC キーは <kbd>A</kbd>〜<kbd>;</kbd> が白鍵、<kbd>W</kbd><kbd>E</kbd><kbd>T</kbd><kbd>Y</kbd><kbd>U</kbd><kbd>O</kbd><kbd>P</kbd> が黒鍵、<kbd>Z</kbd> / <kbd>X</kbd> でオクターブ、<kbd>Space</kbd> でサステイン
+  </p>
+</main>
+
+<footer>MONO KEYS — 73 SAMPLED TONES · 6 VISUALIZERS · WEB MIDI &amp; WEB AUDIO</footer>
+
+<script>
+(function(){
+'use strict';
+
+/* ================= constants ================= */
+var NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+var FLAT_NAMES = ['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+var BLACK = {1:1,3:1,6:1,8:1,10:1};
+var LO = 48, HI = 84; /* C3 .. C6 */
+
+function nameOf(n){ return NOTE_NAMES[n % 12] + (Math.floor(n / 12) - 1); }
+function flatName(n){ return FLAT_NAMES[n % 12] + (Math.floor(n / 12) - 1); }
+function $(id){ return document.getElementById(id); }
+function clamp(x, lo, hi){ return Math.min(Math.max(x, lo), hi); }
+
+/* ================= dom ================= */
+var piano = $('piano');
+var noteValue = $('noteValue'), velFill = $('velFill'), velValue = $('velValue');
+var deviceValue = $('deviceValue'), voiceValue = $('voiceValue'), toneValue = $('toneValue');
+var midiDot = $('midiDot'), midiLabel = $('midiLabel');
+var audioDot = $('audioDot'), audioLabel = $('audioLabel');
+var octValue = $('octValue'), susLed = $('susLed');
+var loadNote = $('loadNote');
+
+/* ================= sound library =================
+   Real sampled instruments — General MIDI soundfonts
+   streamed from CDN (loaded once per instrument, then cached).
+   HQ  : MusyngKite  (high quality, larger download)
+   LITE: FluidR3_GM  (lighter, faster download)
+================================================== */
+var SF_BASE = {
+  HQ: [
+    'https://cdn.jsdelivr.net/gh/gleitz/midi-js-soundfonts@gh-pages/MusyngKite/',
+    'https://gleitz.github.io/midi-js-soundfonts/MusyngKite/'
+  ],
+  LITE: [
+    'https://cdn.jsdelivr.net/gh/gleitz/midi-js-soundfonts@gh-pages/FluidR3_GM/',
+    'https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/'
+  ]
+};
+
+function P(jp, en, gm, rev, rel, trim){
+  return {jp: jp, en: en, gm: gm, rev: rev, rel: rel, trim: trim || 1};
+}
+
+var LIB = {
+PIANO: [
+  P('グランドピアノ',       'Concert Grand',  'acoustic_grand_piano',  .16, .3),
+  P('ブライトピアノ',       'Bright Grand',   'bright_acoustic_piano', .14, .3),
+  P('エレクトリックグランド','Electric Grand', 'electric_grand_piano',  .16, .3),
+  P('ホンキートンク',       'Honky-Tonk',     'honkytonk_piano',       .16, .3),
+  P('ローズ E.ピアノ',      'Rhodes E.Piano', 'electric_piano_1',      .2,  .35),
+  P('FM E.ピアノ',          'FM E.Piano',     'electric_piano_2',      .2,  .35),
+  P('ハープシコード',       'Harpsichord',    'harpsichord',           .14, .12),
+  P('クラビネット',         'Clavinet',       'clavinet',              .1,  .12),
+  P('チェレスタ',           'Celesta',        'celesta',               .26, .5),
+  P('グロッケンシュピール', 'Glockenspiel',   'glockenspiel',          .26, .5),
+  P('オルゴール',           'Music Box',      'music_box',             .3,  .6),
+  P('シロフォン',           'Xylophone',      'xylophone',             .2,  .25)
+],
+WINDS: [
+  P('フルート',             'Flute',          'flute',         .24, .18),
+  P('ピッコロ',             'Piccolo',        'piccolo',       .24, .15),
+  P('パンフルート',         'Pan Flute',      'pan_flute',     .3,  .2),
+  P('リコーダー',           'Recorder',       'recorder',      .22, .15),
+  P('クラリネット',         'Clarinet',       'clarinet',      .2,  .18),
+  P('オーボエ',             'Oboe',           'oboe',          .2,  .18),
+  P('ファゴット',           'Bassoon',        'bassoon',       .22, .18),
+  P('ソプラノサックス',     'Soprano Sax',    'soprano_sax',   .22, .2),
+  P('アルトサックス',       'Alto Sax',       'alto_sax',      .22, .2),
+  P('テナーサックス',       'Tenor Sax',      'tenor_sax',     .22, .2),
+  P('バリトンサックス',     'Baritone Sax',   'baritone_sax',  .22, .2),
+  P('トランペット',         'Trumpet',        'trumpet',       .2,  .15),
+  P('ミュートトランペット', 'Muted Trumpet',  'muted_trumpet', .18, .15),
+  P('トロンボーン',         'Trombone',       'trombone',      .22, .18),
+  P('フレンチホルン',       'French Horn',    'french_horn',   .3,  .25),
+  P('チューバ',             'Tuba',           'tuba',          .2,  .18)
+],
+JAZZ: [
+  P('ジャズオルガン',       'Jazz Organ',       'drawbar_organ',         .12, .07),
+  P('パーカッシブオルガン', 'Percussive Organ', 'percussive_organ',      .12, .07),
+  P('ヴィブラフォン',       'Vibraphone',       'vibraphone',            .28, .8),
+  P('マリンバ',             'Marimba',          'marimba',               .2,  .25),
+  P('ウッドベース',         'Upright Bass',     'acoustic_bass',         .08, .2),
+  P('フレットレスベース',   'Fretless Bass',    'fretless_bass',         .1,  .2),
+  P('フィンガーベース',     'Finger Bass',      'electric_bass_finger',  .08, .18),
+  P('ジャズギター',         'Jazz Guitar',      'electric_guitar_jazz',  .14, .25),
+  P('クリーンギター',       'Clean Guitar',     'electric_guitar_clean', .16, .25),
+  P('ミュートギター',       'Muted Guitar',     'electric_guitar_muted', .08, .1),
+  P('ナイロンギター',       'Nylon Guitar',     'acoustic_guitar_nylon', .2,  .3),
+  P('スチールギター',       'Steel Guitar',     'acoustic_guitar_steel', .18, .3)
+],
+ELECTRO: [
+  P('スクエアリード',       'Square Lead',   'lead_1_square',    .14, .12),
+  P('ソウリード',           'Saw Lead',      'lead_2_sawtooth',  .14, .12),
+  P('カリオペ',             'Calliope',      'lead_3_calliope',  .22, .2),
+  P('チフリード',           'Chiff Lead',    'lead_4_chiff',     .18, .15),
+  P('チャラング',           'Charang',       'lead_5_charang',   .16, .15),
+  P('ヴォイスリード',       'Voice Lead',    'lead_6_voice',     .25, .25),
+  P('ベース＋リード',       'Bass + Lead',   'lead_8_bass__lead',.12, .12),
+  P('シンセベース 1',       'Synth Bass 1',  'synth_bass_1',     .06, .15),
+  P('シンセベース 2',       'Synth Bass 2',  'synth_bass_2',     .06, .15),
+  P('ニューエイジパッド',   'New Age Pad',   'pad_1_new_age',    .34, .6),
+  P('ウォームパッド',       'Warm Pad',      'pad_2_warm',       .38, .8),
+  P('ポリシンセ',           'Polysynth',     'pad_3_polysynth',  .22, .3),
+  P('クリスタル',           'Crystal',       'fx_3_crystal',     .32, .6)
+],
+JAPAN: [
+  P('琴',       'Koto',        'koto',        .22, .3),
+  P('三味線',   'Shamisen',    'shamisen',    .18, .25),
+  P('尺八',     'Shakuhachi',  'shakuhachi',  .3,  .2),
+  P('和太鼓',   'Taiko Drum',  'taiko_drum',  .25, .3),
+  P('鈴',       'Tinkle Bell', 'tinkle_bell', .3,  .5),
+  P('拍子木',   'Woodblock',   'woodblock',   .15, .1)
+],
+WORLD: [
+  P('ハープ',           'Orchestral Harp', 'orchestral_harp', .26, .5),
+  P('チューブラーベル', 'Tubular Bells',   'tubular_bells',   .34, .8),
+  P('ティンパニ',       'Timpani',         'timpani',         .3,  .4),
+  P('シタール',         'Sitar',           'sitar',           .2,  .3),
+  P('バンジョー',       'Banjo',           'banjo',           .12, .15),
+  P('ダルシマー',       'Dulcimer',        'dulcimer',        .2,  .3),
+  P('カリンバ',         'Kalimba',         'kalimba',         .22, .3),
+  P('アコーディオン',   'Accordion',       'accordion',       .15, .15),
+  P('ハーモニカ',       'Harmonica',       'harmonica',       .18, .15),
+  P('バグパイプ',       'Bagpipe',         'bagpipe',         .2,  .2),
+  P('フィドル',         'Fiddle',          'fiddle',          .22, .2),
+  P('シャナイ',         'Shanai',          'shanai',          .2,  .18),
+  P('スチールドラム',   'Steel Drums',     'steel_drums',     .25, .3),
+  P('オカリナ',         'Ocarina',         'ocarina',         .25, .18)
+]
+};
+
+var ALL_PRESETS = [];
+Object.keys(LIB).forEach(function(k){ ALL_PRESETS = ALL_PRESETS.concat(LIB[k]); });
+
+/* ================= state ================= */
+var preset = LIB.PIANO[0];
+var curCat = 'PIANO';
+var quality = 'HQ';
+var searchQ = '';
+var volume = 0.75;
+var octShift = 0;
+var sustain = false;
+var bend = 0; /* semitones */
+var pendingPreviewKey = null;
+
+/* favorites (persisted) */
+var favs = new Set();
+try{
+  var saved = JSON.parse(localStorage.getItem('monoKeysFavs') || '[]');
+  if(Array.isArray(saved)) saved.forEach(function(g){ favs.add(g); });
+}catch(err){}
+function saveFavs(){
+  try{ localStorage.setItem('monoKeysFavs', JSON.stringify(Array.from(favs))); }catch(err){}
+}
+
+/* ================= sample bank (CDN loader) ================= */
+var bank = {}; /* 'HQ/acoustic_grand_piano' -> {ready, loading, raw, buf, wait} */
+
+function bankKey(q, gm){ return q + '/' + gm; }
+function currentKey(){ return bankKey(quality, preset.gm); }
+
+function setLoadNote(text, busy){
+  loadNote.textContent = text || '';
+  loadNote.classList.toggle('busy', !!busy);
+}
+
+function requestLoad(p){
+  var q = quality;
+  var key = bankKey(q, p.gm);
+  var e = bank[key];
+  if(e && (e.ready || e.loading)){
+    if(key === currentKey()) setLoadNote(e.ready ? '' : ('音源をダウンロード中 — ' + p.jp + ' …'), !e.ready);
+    return;
+  }
+  e = bank[key] = {ready: false, loading: true, raw: null, buf: {}, wait: {}};
+  if(key === currentKey()) setLoadNote('音源をダウンロード中 — ' + p.jp + ' …', true);
+  refreshChipStates();
+  var urls = [SF_BASE[q][0] + p.gm + '-mp3.js', SF_BASE[q][1] + p.gm + '-mp3.js'];
+  tryLoad(0);
+
+  function tryLoad(i){
+    if(i >= urls.length){
+      e.loading = false;
+      if(key === currentKey()) setLoadNote('読み込みに失敗しました — インターネット接続をご確認ください', false);
+      refreshChipStates();
+      return;
+    }
+    var s = document.createElement('script');
+    s.src = urls[i];
+    s.addEventListener('load', function(){
+      var d = window.MIDI && window.MIDI.Soundfont && window.MIDI.Soundfont[p.gm];
+      s.remove();
+      if(d){
+        e.raw = d;
+        try{ delete window.MIDI.Soundfont[p.gm]; }catch(err){}
+        e.ready = true;
+        e.loading = false;
+        if(key === currentKey()) setLoadNote('', false);
+        refreshChipStates();
+        prewarm(e);
+        if(pendingPreviewKey === key && key === currentKey()){
+          pendingPreviewKey = null;
+          previewTone();
+        }
+      } else {
+        tryLoad(i + 1);
+      }
+    });
+    s.addEventListener('error', function(){
+      s.remove();
+      tryLoad(i + 1);
+    });
+    document.head.appendChild(s);
+  }
+}
+
+/* decode one sample (base64 mp3 -> AudioBuffer), with in-flight dedup */
+function ensureBuffer(e, key, cb){
+  var b = e.buf[key];
+  if(b){
+    if(b === 'pending'){ (e.wait[key] = e.wait[key] || []).push(cb); }
+    else cb(b);
+    return;
+  }
+  var dat = e.raw[key];
+  if(!dat){ cb(null); return; }
+  e.buf[key] = 'pending';
+  e.wait[key] = [cb];
+  var b64 = dat.substring(dat.indexOf(',') + 1);
+  var bin = atob(b64), len = bin.length, arr = new Uint8Array(len);
+  for(var i = 0; i < len; i++) arr[i] = bin.charCodeAt(i);
+  ctx.decodeAudioData(arr.buffer, function(buf){
+    e.buf[key] = buf;
+    var ws = e.wait[key] || []; delete e.wait[key];
+    for(var j = 0; j < ws.length; j++) ws[j](buf);
+  }, function(){
+    delete e.buf[key];
+    var ws = e.wait[key] || []; delete e.wait[key];
+    for(var j = 0; j < ws.length; j++) ws[j](null);
+  });
+}
+
+/* decode remaining samples gradually in the background */
+function prewarm(e){
+  if(!ctx) return;
+  var keys = Object.keys(e.raw), i = 0;
+  (function step(){
+    if(i >= keys.length) return;
+    var end = Math.min(i + 4, keys.length);
+    for(; i < end; i++) ensureBuffer(e, keys[i], function(){});
+    setTimeout(step, 50);
+  })();
+}
+
+/* nearest available sample for a MIDI note (detune compensated) */
+function pickSample(e, note){
+  for(var o = 0; o <= 9; o++){
+    var c1 = note - o, c2 = note + o;
+    if(c1 >= 0){ var k1 = flatName(c1); if(e.raw[k1]) return {key: k1, n: c1}; }
+    if(o > 0 && c2 <= 127){ var k2 = flatName(c2); if(e.raw[k2]) return {key: k2, n: c2}; }
+  }
+  return null;
+}
+
+/* ================= audio engine ================= */
+var ctx = null, master = null, voiceBus = null, revSend = null, analyser = null;
+var voices = new Map();     /* note -> voice */
+var sustained = new Set();  /* notes held only by pedal */
+
+function updateAudioStatus(){
+  var on = !!(ctx && ctx.state === 'running');
+  audioDot.classList.toggle('on', on);
+  audioLabel.textContent = on ? 'オーディオ有効' : 'クリックでオーディオ有効化';
+}
+
+function makeIR(dur, decay){
+  var rate = ctx.sampleRate, len = Math.floor(rate * dur);
+  var ir = ctx.createBuffer(2, len, rate);
+  for(var ch = 0; ch < 2; ch++){
+    var d = ir.getChannelData(ch);
+    for(var i = 0; i < len; i++){
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+    }
+  }
+  return ir;
+}
+
+function initAudio(){
+  if(ctx) return ctx;
+  var AC = window.AudioContext || window.webkitAudioContext;
+  if(!AC) return null;
+  ctx = new AC();
+  ctx.onstatechange = updateAudioStatus;
+
+  master = ctx.createGain();
+  master.gain.value = volume * volume;
+  var comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -14; comp.knee.value = 20; comp.ratio.value = 4;
+  analyser = ctx.createAnalyser();
+  analyser.fftSize = 2048;
+  analyser.smoothingTimeConstant = 0.82;
+  master.connect(comp);
+  comp.connect(analyser);
+  analyser.connect(ctx.destination);
+
+  voiceBus = ctx.createGain();
+  voiceBus.connect(master);
+
+  revSend = ctx.createGain(); revSend.gain.value = 0;
+  var conv = ctx.createConvolver();
+  conv.buffer = makeIR(2.2, 2.8);
+  voiceBus.connect(revSend);
+  revSend.connect(conv);
+  conv.connect(master);
+
+  applySends();
+  return ctx;
+}
+
+function ensureAudio(){
+  if(!initAudio()) return null;
+  if(ctx.state === 'suspended') ctx.resume();
+  updateAudioStatus();
+  return ctx;
+}
+
+function applySends(){
+  if(!ctx) return;
+  revSend.gain.setTargetAtTime(preset.rev || 0.12, ctx.currentTime, 0.05);
+}
+
+function updateVoices(){ voiceValue.textContent = String(voices.size); }
+
+function showNote(note, vel){
+  noteValue.textContent = nameOf(note);
+  velValue.textContent = String(vel);
+  velFill.style.inlineSize = Math.round(vel / 127 * 100) + '%';
+}
+
+function noteOn(note, vel){
+  if(note < 0 || note > 127) return;
+  if(!ensureAudio()) return;
+  stopVoice(note, true); /* clean retrigger */
+
+  setKey(note, true);
+  showNote(note, vel);
+  vizNote(note, vel);
+
+  var e = bank[currentKey()];
+  if(!e || !e.ready){
+    requestLoad(preset);
+    return; /* sample not downloaded yet — key lights, sound follows once loaded */
+  }
+  var pick = pickSample(e, note);
+  if(!pick) return;
+
+  var v = {killed: false, rel: preset.rel || 0.25, src: null, g: null, b: (note - pick.n) * 100};
+  voices.set(note, v);
+  updateVoices();
+
+  ensureBuffer(e, pick.key, function(buf){
+    if(!buf || v.killed) return;
+    var t = ctx.currentTime;
+    var vv = clamp(vel, 1, 127) / 127;
+
+    var src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.detune.value = v.b + bend * 100;
+
+    /* velocity-shaped tone: softer hits are darker, like a real instrument */
+    var filt = ctx.createBiquadFilter();
+    filt.type = 'lowpass';
+    filt.Q.value = 0.2;
+    filt.frequency.value = clamp(600 + 17500 * Math.pow(vv, 1.4), 600, 18000);
+
+    var g = ctx.createGain();
+    g.gain.value = preset.trim * (0.15 + 0.85 * Math.pow(vv, 1.4)) * 0.95;
+
+    src.connect(filt); filt.connect(g); g.connect(voiceBus);
+    src.start(t);
+    v.src = src; v.g = g;
+    src.onended = function(){
+      if(voices.get(note) === v){
+        voices.delete(note);
+        sustained.delete(note);
+        updateVoices();
+      }
+    };
+  });
+}
+
+function noteOff(note){
+  setKey(note, false);
+  if(!voices.has(note)) return;
+  if(sustain){ sustained.add(note); return; }
+  stopVoice(note, false);
+  updateVoices();
+}
+
+function stopVoice(note, hard){
+  var v = voices.get(note);
+  if(!v) return;
+  voices.delete(note);
+  sustained.delete(note);
+  if(!v.src){ v.killed = true; return; }
+  var t = ctx.currentTime;
+  var rel = hard ? 0.02 : Math.max(v.rel, 0.02);
+  v.g.gain.cancelScheduledValues(t);
+  v.g.gain.setValueAtTime(Math.max(v.g.gain.value, 0.0001), t);
+  v.g.gain.setTargetAtTime(0.0001, t, rel / 3);
+  try{ v.src.stop(t + rel + 0.3); }catch(err){}
+}
+
+function setSustain(on){
+  if(sustain === on) return;
+  sustain = on;
+  susLed.classList.toggle('on', on);
+  if(!on){
+    sustained.forEach(function(nn){ stopVoice(nn, false); });
+    sustained.clear();
+    updateVoices();
+  }
+}
+
+function setBend(semi){
+  bend = semi;
+  if(!ctx) return;
+  var t = ctx.currentTime;
+  voices.forEach(function(v){
+    if(v.src) v.src.detune.setTargetAtTime(v.b + bend * 100, t, 0.01);
+  });
+}
+
+function allOff(){
+  Array.from(voices.keys()).forEach(function(nn){ stopVoice(nn, false); });
+  sustained.clear();
+  var down = document.querySelectorAll('.key.down');
+  for(var i = 0; i < down.length; i++) down[i].classList.remove('down');
+  updateVoices();
+}
+
+/* short auto-preview when a tone is selected */
+function previewTone(){
+  var seq = [60, 64, 67];
+  seq.forEach(function(nn, i){
+    setTimeout(function(){
+      noteOn(nn, 85);
+      setTimeout(function(){ noteOff(nn); }, 430);
+    }, i * 130);
+  });
+}
+
+/* ================= sound library ui ================= */
+var presetGrid = $('presetGrid');
+var catButtons = document.querySelectorAll('#catSeg .tab');
+var qButtons = document.querySelectorAll('#qSeg button');
+var toneSearch = $('toneSearch');
+
+function currentList(){
+  var q = searchQ.trim().toLowerCase();
+  if(q){
+    return ALL_PRESETS.filter(function(p){
+      return p.jp.indexOf(searchQ.trim()) >= 0 ||
+             p.en.toLowerCase().indexOf(q) >= 0 ||
+             p.gm.indexOf(q) >= 0;
+    });
+  }
+  if(curCat === 'FAV') return ALL_PRESETS.filter(function(p){ return favs.has(p.gm); });
+  return LIB[curCat];
+}
+
+function selectPreset(p, doPreview){
+  preset = p;
+  toneValue.textContent = p.jp;
+  applySends();
+  requestLoad(p);
+  var e = bank[currentKey()];
+  if(e && e.ready){
+    setLoadNote('', false);
+    if(doPreview) previewTone();
+  } else if(doPreview){
+    pendingPreviewKey = currentKey();
+  }
+  refreshChipStates();
+}
+
+function refreshChipStates(){
+  var chips = presetGrid.querySelectorAll('.chip');
+  for(var i = 0; i < chips.length; i++){
+    var ch = chips[i], p = ch._preset;
+    if(!p) continue;
+    var e = bank[bankKey(quality, p.gm)];
+    ch.classList.toggle('cached', !!(e && e.ready));
+    ch.classList.toggle('loading', !!(e && e.loading));
+    ch.setAttribute('aria-pressed', p === preset ? 'true' : 'false');
+  }
+}
+
+function toggleFav(p, el){
+  if(favs.has(p.gm)){ favs.delete(p.gm); el.textContent = '☆'; el.classList.remove('on'); }
+  else { favs.add(p.gm); el.textContent = '★'; el.classList.add('on'); }
+  saveFavs();
+  if(curCat === 'FAV' && !searchQ.trim()) renderPresets();
+}
+
+function renderPresets(){
+  presetGrid.textContent = '';
+  var list = currentList();
+  if(!list.length){
+    var msg = document.createElement('span');
+    msg.className = 'grid-empty';
+    msg.textContent = searchQ.trim()
+      ? '該当する音色が見つかりません'
+      : 'まだお気に入りがありません — 各音色の ☆ を押すと登録されます';
+    presetGrid.appendChild(msg);
+    return;
+  }
+  list.forEach(function(p){
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip';
+    b._preset = p;
+
+    var st = document.createElement('span');
+    st.className = 'c-state';
+
+    var names = document.createElement('span');
+    names.className = 'c-names';
+    var jp = document.createElement('span');
+    jp.className = 'c-jp'; jp.textContent = p.jp;
+    var en = document.createElement('span');
+    en.className = 'c-en'; en.textContent = p.en;
+    names.appendChild(jp); names.appendChild(en);
+
+    var fav = document.createElement('span');
+    var isFav = favs.has(p.gm);
+    fav.className = 'c-fav' + (isFav ? ' on' : '');
+    fav.textContent = isFav ? '★' : '☆';
+    fav.title = 'お気に入りに登録 / 解除';
+    fav.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      toggleFav(p, fav);
+    });
+
+    b.appendChild(st); b.appendChild(names); b.appendChild(fav);
+    b.setAttribute('aria-pressed', p === preset ? 'true' : 'false');
+    b.addEventListener('click', function(){ selectPreset(p, true); b.blur(); });
+    presetGrid.appendChild(b);
+  });
+  refreshChipStates();
+}
+
+function stepTone(dir){
+  var list = currentList();
+  if(!list.length) return;
+  var i = list.indexOf(preset);
+  i = (i < 0) ? 0 : (i + dir + list.length) % list.length;
+  selectPreset(list[i], true);
+}
+
+catButtons.forEach(function(b){
+  b.addEventListener('click', function(){
+    curCat = b.dataset.cat;
+    catButtons.forEach(function(x){ x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+    searchQ = '';
+    toneSearch.value = '';
+    renderPresets();
+    b.blur();
+  });
+});
+qButtons.forEach(function(b){
+  b.addEventListener('click', function(){
+    quality = b.dataset.q;
+    qButtons.forEach(function(x){ x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+    requestLoad(preset);
+    var e = bank[currentKey()];
+    if(e && e.ready) setLoadNote('', false);
+    refreshChipStates();
+    b.blur();
+  });
+});
+toneSearch.addEventListener('input', function(){
+  searchQ = toneSearch.value;
+  renderPresets();
+});
+$('prevTone').addEventListener('click', function(){ stepTone(-1); this.blur(); });
+$('nextTone').addEventListener('click', function(){ stepTone(1); this.blur(); });
+
+/* ================= visualizer ================= */
+var canvas = $('viz'), c2 = canvas.getContext('2d');
+var vizType = 'wave';
+var dpr = 1, rot = 0;
+var td = new Uint8Array(2048), fd = new Uint8Array(1024);
+var parts = [], ringsArr = [];
+var colInk = '#141414', colFaint = '#93938e', colLine = '#e5e5e1';
+
+var spec = document.createElement('canvas');
+spec.width = 560; spec.height = 150;
+var sc = spec.getContext('2d');
+
+function refreshColors(){
+  var cs = getComputedStyle(document.documentElement);
+  colInk = cs.getPropertyValue('--ink').trim() || colInk;
+  colFaint = cs.getPropertyValue('--ink-faint').trim() || colFaint;
+  colLine = cs.getPropertyValue('--line').trim() || colLine;
+}
+var mq = matchMedia('(prefers-color-scheme: dark)');
+if(mq.addEventListener) mq.addEventListener('change', refreshColors);
+else if(mq.addListener) mq.addListener(refreshColors);
+
+function fitCanvas(){
+  var r = canvas.getBoundingClientRect();
+  dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.max(2, Math.round(r.width * dpr));
+  canvas.height = Math.max(2, Math.round(r.height * dpr));
+}
+window.addEventListener('resize', fitCanvas);
+
+function vizNote(note, vel){
+  var nx = clamp((note - LO) / (HI - LO), 0, 1);
+  var v = vel / 127;
+  for(var i = 0; i < 6; i++){
+    parts.push({
+      nx: nx + (Math.random() - 0.5) * 0.03,
+      ny: 0.82,
+      vx: (Math.random() - 0.5) * 0.004,
+      vy: -(0.005 + Math.random() * 0.011 * (0.4 + v)),
+      a: 0.9,
+      dk: 0.011 + Math.random() * 0.012,
+      r: 1.2 + 3.6 * v * Math.random()
+    });
+  }
+  if(parts.length > 260) parts.splice(0, parts.length - 260);
+  ringsArr.push({nx: nx, r: 0.02, v: v, a: 0.9});
+  if(ringsArr.length > 60) ringsArr.splice(0, ringsArr.length - 60);
+}
+
+function updateFx(){
+  var i;
+  for(i = parts.length - 1; i >= 0; i--){
+    var p = parts[i];
+    p.nx += p.vx; p.ny += p.vy;
+    p.vy *= 0.985;
+    p.a -= p.dk;
+    if(p.a <= 0) parts.splice(i, 1);
+  }
+  for(i = ringsArr.length - 1; i >= 0; i--){
+    var rg = ringsArr[i];
+    rg.r += 0.012 + rg.v * 0.014;
+    rg.a -= 0.014;
+    if(rg.a <= 0) ringsArr.splice(i, 1);
+  }
+}
+
+function rmsLevel(){
+  var s = 0;
+  for(var i = 0; i < td.length; i += 8){
+    var x = (td[i] - 128) / 128;
+    s += x * x;
+  }
+  return Math.min(1, Math.sqrt(s / (td.length / 8)) * 2.4);
+}
+
+var VIZ = {
+  wave: function(w, h){
+    c2.strokeStyle = colLine;
+    c2.lineWidth = dpr;
+    c2.beginPath(); c2.moveTo(0, h / 2); c2.lineTo(w, h / 2); c2.stroke();
+    c2.strokeStyle = colInk;
+    c2.lineWidth = 1.6 * dpr;
+    c2.beginPath();
+    var N = td.length;
+    for(var i = 0; i < N; i += 2){
+      var x = i / (N - 1) * w;
+      var y = h / 2 + (td[i] - 128) / 128 * h * 0.44;
+      if(i === 0) c2.moveTo(x, y); else c2.lineTo(x, y);
+    }
+    c2.stroke();
+  },
+  bars: function(w, h){
+    var nb = 64, bw = w / nb;
+    for(var i = 0; i < nb; i++){
+      var idx = Math.floor(Math.pow(i / nb, 1.8) * fd.length * 0.72);
+      var val = fd[idx] / 255;
+      var bh = Math.max(val * h * 0.94, dpr);
+      c2.globalAlpha = 0.22 + 0.78 * val;
+      c2.fillStyle = colInk;
+      c2.fillRect(i * bw + bw * 0.18, h - bh, bw * 0.64, bh);
+    }
+    c2.globalAlpha = 1;
+  },
+  radial: function(w, h){
+    var cx = w / 2, cy = h / 2;
+    var m = Math.min(w, h);
+    var base = m * 0.19;
+    rot += 0.0016;
+    c2.strokeStyle = colFaint;
+    c2.globalAlpha = 0.5;
+    c2.lineWidth = dpr;
+    c2.beginPath(); c2.arc(cx, cy, base - 4 * dpr, 0, Math.PI * 2); c2.stroke();
+    c2.globalAlpha = 1;
+    var nb = 96;
+    c2.lineWidth = 1.4 * dpr;
+    for(var i = 0; i < nb; i++){
+      var idx = Math.floor(Math.pow(i / nb, 1.6) * fd.length * 0.7);
+      var val = fd[idx] / 255;
+      var an = i / nb * Math.PI * 2 + rot;
+      var r2 = base + val * m * 0.34;
+      c2.globalAlpha = 0.18 + 0.82 * val;
+      c2.strokeStyle = colInk;
+      c2.beginPath();
+      c2.moveTo(cx + Math.cos(an) * base, cy + Math.sin(an) * base);
+      c2.lineTo(cx + Math.cos(an) * r2, cy + Math.sin(an) * r2);
+      c2.stroke();
+    }
+    c2.globalAlpha = 1;
+  },
+  spectro: function(w, h){
+    sc.globalAlpha = 1;
+    sc.drawImage(spec, -1, 0);
+    sc.clearRect(spec.width - 1, 0, 1, spec.height);
+    sc.fillStyle = colInk;
+    for(var y = 0; y < spec.height; y++){
+      var idx = Math.floor(Math.pow(1 - y / spec.height, 2.2) * fd.length * 0.7);
+      var val = fd[idx] / 255;
+      if(val > 0.02){
+        sc.globalAlpha = val;
+        sc.fillRect(spec.width - 1, y, 1, 1);
+      }
+    }
+    c2.imageSmoothingEnabled = true;
+    c2.drawImage(spec, 0, 0, w, h);
+  },
+  particles: function(w, h){
+    var lv = rmsLevel();
+    c2.strokeStyle = colFaint;
+    c2.globalAlpha = 0.6;
+    c2.lineWidth = dpr * (1 + lv * 3);
+    c2.beginPath(); c2.moveTo(0, h * 0.86); c2.lineTo(w, h * 0.86); c2.stroke();
+    c2.fillStyle = colInk;
+    for(var i = 0; i < parts.length; i++){
+      var p = parts[i];
+      c2.globalAlpha = Math.max(0, p.a);
+      c2.beginPath();
+      c2.arc(p.nx * w, p.ny * h, p.r * dpr, 0, Math.PI * 2);
+      c2.fill();
+    }
+    c2.globalAlpha = 1;
+  },
+  rings: function(w, h){
+    var lv = rmsLevel();
+    c2.strokeStyle = colFaint;
+    c2.globalAlpha = 0.55;
+    c2.lineWidth = dpr;
+    c2.beginPath(); c2.arc(w / 2, h / 2, Math.max(2, lv * h * 0.3), 0, Math.PI * 2); c2.stroke();
+    c2.strokeStyle = colInk;
+    for(var i = 0; i < ringsArr.length; i++){
+      var rg = ringsArr[i];
+      c2.globalAlpha = Math.max(0, rg.a);
+      c2.lineWidth = dpr * (1 + rg.v);
+      c2.beginPath();
+      c2.arc(rg.nx * w, h / 2, rg.r * h * 2.2, 0, Math.PI * 2);
+      c2.stroke();
+    }
+    c2.globalAlpha = 1;
+  }
+};
+
+function frame(){
+  requestAnimationFrame(frame);
+  var w = canvas.width, h = canvas.height;
+  c2.clearRect(0, 0, w, h);
+  if(analyser){
+    analyser.getByteTimeDomainData(td);
+    analyser.getByteFrequencyData(fd);
+  } else {
+    td.fill(128); fd.fill(0);
+  }
+  updateFx();
+  VIZ[vizType](w, h);
+}
+
+var vizButtons = document.querySelectorAll('#vizSeg button');
+vizButtons.forEach(function(b){
+  b.addEventListener('click', function(){
+    vizType = b.dataset.viz;
+    vizButtons.forEach(function(x){ x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+    b.blur();
+  });
+});
+
+/* ================= on-screen piano ================= */
+var keyEls = new Map();
+
+function buildPiano(){
+  var whites = 0, nn;
+  for(nn = LO; nn <= HI; nn++) if(!BLACK[nn % 12]) whites++;
+  var ww = 100 / whites;
+  var bw = ww * 0.62;
+  var wi = 0;
+  for(nn = LO; nn <= HI; nn++){
+    var isB = !!BLACK[nn % 12];
+    var el = document.createElement('div');
+    el.className = 'key ' + (isB ? 'black' : 'white');
+    el.dataset.note = String(nn);
+    if(isB){
+      el.style.insetInlineStart = (wi * ww - bw / 2) + '%';
+      el.style.inlineSize = bw + '%';
+    }else{
+      el.style.insetInlineStart = (wi * ww) + '%';
+      el.style.inlineSize = ww + '%';
+      if(nn % 12 === 0){
+        var lab = document.createElement('span');
+        lab.className = 'klabel';
+        lab.textContent = nameOf(nn);
+        el.appendChild(lab);
+      }
+      wi++;
+    }
+    piano.appendChild(el);
+    keyEls.set(nn, el);
+  }
+}
+
+function setKey(nn, down){
+  var el = keyEls.get(nn);
+  if(el) el.classList.toggle('down', down);
+}
+
+/* pointer interaction (with glissando) */
+var pointers = new Map();
+
+function keyFromEvent(e){
+  var el = e.target && e.target.closest ? e.target.closest('.key') : null;
+  return el ? parseInt(el.dataset.note, 10) : null;
+}
+function velFromEvent(e){
+  var el = e.target.closest('.key');
+  if(!el) return 100;
+  var r = el.getBoundingClientRect();
+  var y = (e.clientY - r.top) / r.height;
+  return Math.round(52 + 75 * Math.min(1, Math.max(0, y)));
+}
+
+piano.addEventListener('pointerdown', function(e){
+  var nn = keyFromEvent(e);
+  if(nn === null) return;
+  e.preventDefault();
+  try{ e.target.releasePointerCapture(e.pointerId); }catch(err){}
+  pointers.set(e.pointerId, nn);
+  noteOn(nn, velFromEvent(e));
+});
+piano.addEventListener('pointerover', function(e){
+  if(!pointers.has(e.pointerId)) return;
+  var nn = keyFromEvent(e);
+  if(nn === null || nn === pointers.get(e.pointerId)) return;
+  noteOff(pointers.get(e.pointerId));
+  pointers.set(e.pointerId, nn);
+  noteOn(nn, velFromEvent(e));
+});
+function endPointer(e){
+  if(!pointers.has(e.pointerId)) return;
+  noteOff(pointers.get(e.pointerId));
+  pointers.delete(e.pointerId);
+}
+window.addEventListener('pointerup', endPointer);
+window.addEventListener('pointercancel', endPointer);
+
+/* ================= pc keyboard ================= */
+var KEYMAP = {
+  KeyA:0, KeyW:1, KeyS:2, KeyE:3, KeyD:4, KeyF:5, KeyT:6, KeyG:7,
+  KeyY:8, KeyH:9, KeyU:10, KeyJ:11, KeyK:12, KeyO:13, KeyL:14, KeyP:15, Semicolon:16
+};
+var pcHeld = new Map();
+
+function fmtOct(){ return (octShift > 0 ? '+' : '') + octShift; }
+
+window.addEventListener('keydown', function(e){
+  if(e.target && e.target.tagName === 'INPUT') return; /* typing in search / sliders */
+  if(e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+  if(e.code === 'Space'){ e.preventDefault(); setSustain(true); return; }
+  if(e.code === 'KeyZ'){ octShift = Math.max(-2, octShift - 1); octValue.textContent = fmtOct(); return; }
+  if(e.code === 'KeyX'){ octShift = Math.min(2, octShift + 1); octValue.textContent = fmtOct(); return; }
+  var off = KEYMAP[e.code];
+  if(off === undefined || pcHeld.has(e.code)) return;
+  var nn = 60 + octShift * 12 + off;
+  pcHeld.set(e.code, nn);
+  noteOn(nn, 100);
+});
+window.addEventListener('keyup', function(e){
+  if(e.target && e.target.tagName === 'INPUT') return;
+  if(e.code === 'Space'){ setSustain(false); return; }
+  var nn = pcHeld.get(e.code);
+  if(nn !== undefined){ pcHeld.delete(e.code); noteOff(nn); }
+});
+window.addEventListener('blur', function(){
+  pcHeld.clear();
+  pointers.clear();
+  setSustain(false);
+  if(ctx) allOff();
+});
+
+/* ================= controls ================= */
+$('octDown').addEventListener('click', function(){
+  octShift = Math.max(-2, octShift - 1); octValue.textContent = fmtOct(); this.blur();
+});
+$('octUp').addEventListener('click', function(){
+  octShift = Math.min(2, octShift + 1); octValue.textContent = fmtOct(); this.blur();
+});
+$('vol').addEventListener('input', function(e){
+  volume = e.target.value / 100;
+  if(master && ctx) master.gain.setTargetAtTime(volume * volume, ctx.currentTime, 0.02);
+});
+$('panic').addEventListener('click', function(){ if(ctx) allOff(); this.blur(); });
+
+/* audio unlock on any gesture */
+window.addEventListener('pointerdown', function(){ ensureAudio(); });
+window.addEventListener('keydown', function(){ ensureAudio(); });
+
+/* ================= web midi ================= */
+var midi = null;
+
+function refreshInputs(){
+  var names = [];
+  midi.inputs.forEach(function(inp){
+    inp.onmidimessage = onMIDI;
+    if(inp.state === 'connected') names.push(inp.name || 'MIDI Device');
+  });
+  var ok = names.length > 0;
+  midiDot.classList.toggle('on', ok);
+  midiLabel.textContent = ok ? ('MIDI 接続中 · ' + names.length + ' 台') : 'MIDI 機器を接続してください';
+  deviceValue.textContent = ok ? names.join(' / ') : '—';
+}
+
+function onMIDI(e){
+  var d = e.data;
+  if(!d || d.length < 1) return;
+  var cmd = d[0] & 0xF0;
+  var d1 = d[1] || 0, d2 = d[2] || 0;
+  if(cmd === 0x90 && d2 > 0){ noteOn(d1, d2); }
+  else if(cmd === 0x80 || (cmd === 0x90 && d2 === 0)){ noteOff(d1); }
+  else if(cmd === 0xB0){
+    if(d1 === 64){ setSustain(d2 >= 64); }
+    else if(d1 === 120 || d1 === 123){ allOff(); }
+  }
+  else if(cmd === 0xE0){
+    var val = ((d2 << 7) | d1) - 8192;
+    setBend(2 * val / 8192);
+  }
+}
+
+function initMIDI(){
+  if(!navigator.requestMIDIAccess){
+    midiLabel.textContent = 'Web MIDI 非対応ブラウザ（画面/PC キーで演奏可）';
+    return;
+  }
+  navigator.requestMIDIAccess().then(function(acc){
+    midi = acc;
+    refreshInputs();
+    acc.addEventListener('statechange', refreshInputs);
+  }).catch(function(){
+    midiLabel.textContent = 'MIDI アクセスが許可されませんでした';
+  });
+}
+
+/* ================= init ================= */
+buildPiano();
+renderPresets();
+toneValue.textContent = preset.jp;
+octValue.textContent = fmtOct();
+refreshColors();
+fitCanvas();
+requestAnimationFrame(frame);
+initAudio();            /* created suspended — decoding works before first gesture */
+updateAudioStatus();
+requestLoad(preset);    /* start downloading the default grand piano right away */
+initMIDI();
+})();
+</script>
+</body>
+</html>
